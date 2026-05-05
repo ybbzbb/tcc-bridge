@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 
 from telegram import Update
@@ -10,7 +12,7 @@ from telegram.ext import (
 )
 
 from config import BotConfig
-from cc_session import CCSession, State
+from cc_session import CCSession
 from output_processor import chunk, strip_ansi
 
 log = logging.getLogger(__name__)
@@ -49,49 +51,38 @@ class TelegramBot:
     async def _cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
-        if self.session.state == State.RUNNING:
+        if self.session.is_running:
             await update.message.reply_text("⚠️ Session is already running.")
             return
-        await update.message.reply_text("🚀 Starting Claude Code...")
-        try:
-            await self.session.start()
-            await update.message.reply_text(
-                f"✅ Ready.\nProject: {self.cfg.project_name}\nModel: {self.cfg.model}"
-            )
-        except Exception as e:
-            log.exception("start failed")
-            await update.message.reply_text(f"❌ Failed to start: {e}")
+        self.session.start()
+        await update.message.reply_text(
+            f"✅ Ready.\nProject: {self.cfg.project_name}\nModel: {self.cfg.model}"
+        )
 
     async def _cmd_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
-        if self.session.state == State.STOPPED:
+        if not self.session.is_running:
             await update.message.reply_text("⚠️ Session is not running.")
             return
-        await self.session.stop()
+        self.session.stop()
         await update.message.reply_text("🔴 Session stopped.")
 
     async def _cmd_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
-        await update.message.reply_text("🔄 Restarting...")
-        try:
-            await self.session.restart()
-            await update.message.reply_text("✅ Session restarted.")
-        except Exception as e:
-            log.exception("restart failed")
-            await update.message.reply_text(f"❌ Restart failed: {e}")
+        self.session.restart()
+        await update.message.reply_text("✅ Session restarted.")
 
     async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
-        s = self.session
-        if s.state == State.STOPPED:
+        if not self.session.is_running:
             text = f"🔴 Stopped | {self.cfg.project_name}"
-        elif s.is_busy:
-            text = f"⏳ Busy | {self.cfg.project_name} | Uptime: {s.uptime}"
+        elif self.session.is_busy:
+            text = f"⏳ Busy | {self.cfg.project_name} | Uptime: {self.session.uptime}"
         else:
-            text = f"✅ Idle | {self.cfg.project_name} | Uptime: {s.uptime}"
+            text = f"✅ Idle | {self.cfg.project_name} | Uptime: {self.session.uptime}"
         await update.message.reply_text(text)
 
     async def _cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -102,7 +93,7 @@ class TelegramBot:
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
-        if self.session.state != State.RUNNING:
+        if not self.session.is_running:
             await update.message.reply_text("🔴 Session not running. Send /start first.")
             return
         if self.session.is_busy:
@@ -116,7 +107,7 @@ class TelegramBot:
             return
         except Exception as e:
             log.exception("send_message failed")
-            await self.session.stop()
+            self.session.stop()
             await update.message.reply_text(
                 f"❌ Error: {e}\nSession stopped. Use /start to restart."
             )
@@ -139,6 +130,6 @@ class TelegramBot:
         await self.app.updater.stop()
         await self.app.stop()
         await self.app.shutdown()
-        if self.session.state == State.RUNNING:
-            await self.session.stop()
+        if self.session.is_running:
+            self.session.stop()
         log.info("Bot stopped for project: %s", self.cfg.project_name)
