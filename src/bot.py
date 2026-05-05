@@ -17,6 +17,12 @@ from output_processor import chunk, strip_ansi
 
 log = logging.getLogger(__name__)
 
+
+def _mask(uid: int) -> str:
+    s = str(uid)
+    return s[:2] + "***" + s[-2:]
+
+
 HELP_TEXT = (
     "Commands:\n"
     "/start   — Start Claude Code session\n"
@@ -46,7 +52,7 @@ class TelegramBot:
         )
 
     def _allowed(self, update: Update) -> bool:
-        return update.effective_user.id == self.cfg.allowed_user_id
+        return _mask(update.effective_user.id) == self.cfg.allowed_user_id
 
     async def _cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
@@ -55,7 +61,7 @@ class TelegramBot:
             await update.message.reply_text("⚠️ Session is already running.")
             return
         self.session.start()
-        log.info("[%s] session started by user %s", self.cfg.project_name, update.effective_user.id)
+        log.info("[%s] session started by user %s", self.cfg.project_name, _mask(update.effective_user.id))
         await update.message.reply_text(
             f"✅ Ready.\nProject: {self.cfg.project_name}\nModel: {self.cfg.model}"
         )
@@ -67,7 +73,7 @@ class TelegramBot:
             await update.message.reply_text("⚠️ Session is not running.")
             return
         self.session.stop()
-        log.info("[%s] session stopped by user %s", self.cfg.project_name, update.effective_user.id)
+        log.info("[%s] session stopped by user %s", self.cfg.project_name, _mask(update.effective_user.id))
         await update.message.reply_text("🔴 Session stopped.")
 
     async def _cmd_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
