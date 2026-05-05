@@ -91,6 +91,8 @@ class CCSession:
         total_chars = 0
         loop = asyncio.get_event_loop()
         deadline = loop.time() + MAX_RESPONSE
+        start_time = loop.time()
+        last_heartbeat = start_time
 
         try:
             while True:
@@ -111,6 +113,10 @@ class CCSession:
                     total_chars += len(decoded)
 
                 except asyncio.TimeoutError:
+                    now = loop.time()
+                    if now - last_heartbeat >= 10:
+                        log.info("... CC still running (%.0fs elapsed)", now - start_time)
+                        last_heartbeat = now
                     if buffer:
                         chunk = "".join(buffer)
                         buffer = []
