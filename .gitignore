@@ -1,4 +1,5 @@
-# Environment / secrets
+# Secrets / config with tokens
+bots.toml
 .env
 .env.local
 .env.*.local

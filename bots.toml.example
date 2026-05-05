@@ -1,0 +1,14 @@
+[[bots]]
+token = "your_bot_token_A"
+allowed_user_id = 123456789
+project_path = "/home/ubuntu/codes/projectA"
+project_name = "projectA"
+model = "claude-sonnet-4-6"
+chunk_size = 4000
+
+[[bots]]
+token = "your_bot_token_B"
+allowed_user_id = 123456789
+project_path = "/home/ubuntu/codes/projectB"
+project_name = "projectB"
+# model and chunk_size are optional, defaults shown above

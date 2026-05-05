@@ -9,7 +9,7 @@ from telegram.ext import (
     filters,
 )
 
-import config
+from config import BotConfig
 from cc_session import CCSession, State
 from output_processor import chunk, strip_ansi
 
@@ -27,9 +27,10 @@ HELP_TEXT = (
 
 
 class TelegramBot:
-    def __init__(self) -> None:
-        self.session = CCSession(config.PROJECT_PATH, config.CC_MODEL)
-        self.app = Application.builder().token(config.BOT_TOKEN).build()
+    def __init__(self, cfg: BotConfig) -> None:
+        self.cfg = cfg
+        self.session = CCSession(cfg.project_path, cfg.model)
+        self.app = Application.builder().token(cfg.token).build()
         self._register_handlers()
 
     def _register_handlers(self) -> None:
@@ -43,7 +44,7 @@ class TelegramBot:
         )
 
     def _allowed(self, update: Update) -> bool:
-        return update.effective_user.id == config.ALLOWED_USER_ID
+        return update.effective_user.id == self.cfg.allowed_user_id
 
     async def _cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
@@ -55,7 +56,7 @@ class TelegramBot:
         try:
             await self.session.start()
             await update.message.reply_text(
-                f"✅ Ready.\nProject: {config.PROJECT_NAME}\nModel: {config.CC_MODEL}"
+                f"✅ Ready.\nProject: {self.cfg.project_name}\nModel: {self.cfg.model}"
             )
         except Exception as e:
             log.exception("start failed")
@@ -86,11 +87,11 @@ class TelegramBot:
             return
         s = self.session
         if s.state == State.STOPPED:
-            text = f"🔴 Stopped | {config.PROJECT_NAME}"
+            text = f"🔴 Stopped | {self.cfg.project_name}"
         elif s.is_busy:
-            text = f"⏳ Busy | {config.PROJECT_NAME} | Uptime: {s.uptime}"
+            text = f"⏳ Busy | {self.cfg.project_name} | Uptime: {s.uptime}"
         else:
-            text = f"✅ Idle | {config.PROJECT_NAME} | Uptime: {s.uptime}"
+            text = f"✅ Idle | {self.cfg.project_name} | Uptime: {s.uptime}"
         await update.message.reply_text(text)
 
     async def _cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -121,12 +122,23 @@ class TelegramBot:
             )
             return
 
-        parts = chunk(strip_ansi(response), config.CHUNK_SIZE)
+        parts = chunk(strip_ansi(response), self.cfg.chunk_size)
         if not parts:
             await update.message.reply_text("_(no output)_")
             return
         for part in parts:
-            await context.bot.send_message(config.ALLOWED_USER_ID, part)
+            await context.bot.send_message(self.cfg.allowed_user_id, part)
 
-    def run(self) -> None:
-        self.app.run_polling(allowed_updates=Update.ALL_TYPES)
+    async def start(self) -> None:
+        await self.app.initialize()
+        await self.app.start()
+        await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        log.info("Bot started for project: %s", self.cfg.project_name)
+
+    async def stop(self) -> None:
+        await self.app.updater.stop()
+        await self.app.stop()
+        await self.app.shutdown()
+        if self.session.state == State.RUNNING:
+            await self.session.stop()
+        log.info("Bot stopped for project: %s", self.cfg.project_name)
