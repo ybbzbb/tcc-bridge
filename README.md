@@ -26,6 +26,29 @@ tcc-bridge 服务（一个 systemd 进程）
 
 ---
 
+## 第一步：准备 Telegram Bot
+
+### 创建 Bot，获取 Token
+
+1. Telegram 搜索 `@BotFather`，发送 `/newbot`
+2. 输入 Bot 显示名称（随意，如 `My Project Bridge`）
+3. 输入 Bot 用户名（全局唯一，必须以 `_bot` 结尾，如 `myproject_cc_bot`）
+4. 成功后 BotFather 回复 Token，格式如下，复制保存：
+
+```
+123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+> **安全提示：** Token 等同于密码，不要发给任何人、不要提交到代码仓库。
+
+### 获取你的 Telegram User ID
+
+1. Telegram 搜索 `@userinfobot`
+2. 发送任意消息
+3. 机器人回复中的 `Id` 字段就是你的 User ID（纯数字）
+
+---
+
 ## 安装
 
 ### 1. 克隆仓库
