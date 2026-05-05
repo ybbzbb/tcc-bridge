@@ -103,25 +103,31 @@ class TelegramBot:
             return
 
         try:
-            response = await self.session.send_message(update.message.text)
+            stream = await self.session.send_message(update.message.text)
+        except RuntimeError as e:
+            await update.message.reply_text(f"❌ {e}")
+            return
+
+        sent = 0
+        try:
+            async for raw in stream:
+                for part in chunk(strip_ansi(raw), self.cfg.chunk_size):
+                    await context.bot.send_message(self.cfg.allowed_user_id, part)
+                    sent += 1
         except RuntimeError as e:
             await update.message.reply_text(f"❌ {e}")
             return
         except Exception as e:
-            log.exception("send_message failed")
+            log.exception("stream failed")
             self.session.stop()
             await update.message.reply_text(
                 f"❌ Error: {e}\nSession stopped. Use /start to restart."
             )
             return
 
-        parts = chunk(strip_ansi(response), self.cfg.chunk_size)
-        log.info("[%s] reply %d chunk(s)", self.cfg.project_name, len(parts))
-        if not parts:
+        log.info("[%s] reply %d message(s)", self.cfg.project_name, sent)
+        if sent == 0:
             await update.message.reply_text("_(no output)_")
-            return
-        for part in parts:
-            await context.bot.send_message(self.cfg.allowed_user_id, part)
 
     async def start(self) -> None:
         await self.app.initialize()
