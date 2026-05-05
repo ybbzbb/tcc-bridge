@@ -1,5 +1,10 @@
-import tomllib
-from dataclasses import dataclass, field
+from __future__ import annotations
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # pip install tomli for Python < 3.11
+from dataclasses import dataclass
 from pathlib import Path
 
 CONFIG_FILE = Path(__file__).parent.parent / "bots.toml"
