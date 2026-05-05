@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 try:
     import tomllib
 except ImportError:
@@ -7,7 +9,7 @@ except ImportError:
 from dataclasses import dataclass
 from pathlib import Path
 
-CONFIG_FILE = Path(__file__).parent.parent / "bots.toml"
+DEFAULT_CONFIG_FILE = Path(__file__).parent.parent / "bots.toml"
 
 
 @dataclass
@@ -23,6 +25,7 @@ class BotConfig:
 
 
 def load() -> list[BotConfig]:
-    with open(CONFIG_FILE, "rb") as f:
+    config_path = Path(os.getenv("TCC_BRIDGE_CONFIG", str(DEFAULT_CONFIG_FILE))).expanduser()
+    with open(config_path, "rb") as f:
         data = tomllib.load(f)
     return [BotConfig(**bot) for bot in data["bots"]]

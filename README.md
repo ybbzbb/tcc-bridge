@@ -66,11 +66,14 @@ pip3 install -r requirements.txt
 
 ### 3. 配置 `bots.toml`
 
+推荐把配置文件放在项目外，例如 `/etc/tcc-bridge/bots.toml`。
+
 复制示例并填写：
 
 ```bash
-cp bots.toml.example bots.toml
-nano bots.toml
+sudo mkdir -p /etc/tcc-bridge
+sudo cp bots.toml.example /etc/tcc-bridge/bots.toml
+sudo nano /etc/tcc-bridge/bots.toml
 ```
 
 ```toml
@@ -93,6 +96,8 @@ project_name = "projectB"
 ```
 
 每个 `[[bots]]` 块对应一个 Bot 和一个项目，数量不限。
+
+程序默认读取项目根目录的 `bots.toml`。如果设置了环境变量 `TCC_BRIDGE_CONFIG`，则优先读取该路径。
 
 ---
 
@@ -127,7 +132,7 @@ chmod +x deploy/install_ubuntu22.sh
 ./deploy/install_ubuntu22.sh
 ```
 
-脚本会自动安装 `python3` / `python3-venv`、创建 `.venv`、安装依赖、生成 `bots.toml`、写入 systemd service 并启动服务。
+脚本会自动安装 `python3` / `python3-venv`、创建 `.venv`、安装依赖、在 `/etc/tcc-bridge/bots.toml` 生成配置文件、写入 systemd service 并启动服务。
 
 ### 1. 复制 service 文件
 
@@ -145,8 +150,11 @@ sudo nano /etc/systemd/system/tcc-bridge.service
 
 ```ini
 User=ubuntu                                    # 改为你的用户名
-WorkingDirectory=/home/ubuntu/tcc-bridge       # 改为实际路径
-ExecStart=/usr/bin/python3 src/main.py         # 确认 python3 路径
+Group=ubuntu                                   # 改为你的用户组
+WorkingDirectory=/opt/tcc-bridge               # 改为实际路径
+Environment=TCC_BRIDGE_CONFIG=/etc/tcc-bridge/bots.toml
+EnvironmentFile=-/opt/tcc-bridge/.env
+ExecStart=/opt/tcc-bridge/.venv/bin/python /opt/tcc-bridge/src/main.py
 ```
 
 ### 3. 启动服务
@@ -168,7 +176,7 @@ sudo journalctl -u tcc-bridge -f
 ## 添加新项目
 
 1. 在 [@BotFather](https://t.me/BotFather) 创建新 bot，获取 token
-2. 在 `bots.toml` 末尾追加一个新的 `[[bots]]` 块
+2. 在 `/etc/tcc-bridge/bots.toml` 末尾追加一个新的 `[[bots]]` 块
 3. 重启服务：`sudo systemctl restart tcc-bridge`
 
 ---
@@ -190,7 +198,7 @@ sudo journalctl -u tcc-bridge -f
 ## 安全说明
 
 - `allowed_user_id` 白名单：非白名单用户的消息被静默忽略。
-- `bots.toml` 含有 bot token，已加入 `.gitignore`，不会上传到代码仓库。
+- `bots.toml` 含有 bot token，生产环境建议放在 `/etc/tcc-bridge/bots.toml`，不要跟代码放在一起。
 - Claude Code 以 `--dangerously-skip-permissions` 模式运行，拥有完整文件系统权限，请确保服务器安全。
 
 ---

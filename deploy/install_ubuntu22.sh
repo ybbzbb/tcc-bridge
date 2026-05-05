@@ -16,6 +16,8 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 VENV_DIR="${VENV_DIR:-${APP_DIR}/.venv}"
 SERVICE_NAME="${SERVICE_NAME:-tcc-bridge}"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+CONFIG_DIR="${CONFIG_DIR:-/etc/tcc-bridge}"
+CONFIG_FILE="${CONFIG_FILE:-${CONFIG_DIR}/bots.toml}"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -41,10 +43,11 @@ echo "[3/7] Preparing runtime directories"
 require_command "$PYTHON_BIN"
 mkdir -p "${APP_DIR}"
 mkdir -p "${APP_DIR}/logs"
+mkdir -p "${CONFIG_DIR}"
 touch "${APP_DIR}/.env"
-if [[ ! -f "${APP_DIR}/bots.toml" && -f "${APP_DIR}/bots.toml.example" ]]; then
-  cp "${APP_DIR}/bots.toml.example" "${APP_DIR}/bots.toml"
-  echo "created ${APP_DIR}/bots.toml from example"
+if [[ ! -f "${CONFIG_FILE}" && -f "${APP_DIR}/bots.toml.example" ]]; then
+  cp "${APP_DIR}/bots.toml.example" "${CONFIG_FILE}"
+  echo "created ${CONFIG_FILE} from example"
 fi
 
 echo "[4/7] Installing Python dependencies"
@@ -64,10 +67,11 @@ Type=simple
 User=${APP_USER}
 Group=${APP_GROUP}
 WorkingDirectory=${APP_DIR}
+Environment=TCC_BRIDGE_CONFIG=${CONFIG_FILE}
+EnvironmentFile=-${APP_DIR}/.env
 ExecStart=${VENV_DIR}/bin/python ${APP_DIR}/src/main.py
 Restart=on-failure
 RestartSec=10
-EnvironmentFile=${APP_DIR}/.env
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=${APP_NAME}
@@ -94,6 +98,6 @@ fi
 echo
 echo "deployment complete"
 echo "next steps:"
-echo "1. edit ${APP_DIR}/bots.toml"
+echo "1. edit ${CONFIG_FILE}"
 echo "2. if needed, edit ${APP_DIR}/.env"
 echo "3. inspect logs with: sudo journalctl -u ${SERVICE_NAME} -f"
