@@ -62,10 +62,16 @@ class CCSession:
 
         self._busy = True
         try:
-            proc = await asyncio.create_subprocess_exec(
+            cmd = [
                 "claude", "--print", "--continue",
                 "--dangerously-skip-permissions",
                 "--model", self.model,
+            ]
+            log.info(">>> [%s] %s", self.project_path, text[:200])
+            log.info("CMD %s", " ".join(cmd))
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
@@ -82,6 +88,10 @@ class CCSession:
                 raise RuntimeError("CC response timed out (10 min)")
 
             output = stdout.decode("utf-8", errors="replace").strip()
+            log.info("<<< [exit=%d] %d chars", proc.returncode, len(output))
+            if output:
+                log.debug("RESPONSE:\n%s", output[:1000])
+
             if proc.returncode != 0:
                 raise RuntimeError(
                     f"CC exited with code {proc.returncode}.\n{output[-500:] or '(no output)'}"

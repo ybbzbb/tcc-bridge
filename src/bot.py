@@ -55,6 +55,7 @@ class TelegramBot:
             await update.message.reply_text("⚠️ Session is already running.")
             return
         self.session.start()
+        log.info("[%s] session started by user %s", self.cfg.project_name, update.effective_user.id)
         await update.message.reply_text(
             f"✅ Ready.\nProject: {self.cfg.project_name}\nModel: {self.cfg.model}"
         )
@@ -66,6 +67,7 @@ class TelegramBot:
             await update.message.reply_text("⚠️ Session is not running.")
             return
         self.session.stop()
+        log.info("[%s] session stopped by user %s", self.cfg.project_name, update.effective_user.id)
         await update.message.reply_text("🔴 Session stopped.")
 
     async def _cmd_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -114,6 +116,7 @@ class TelegramBot:
             return
 
         parts = chunk(strip_ansi(response), self.cfg.chunk_size)
+        log.info("[%s] reply %d chunk(s)", self.cfg.project_name, len(parts))
         if not parts:
             await update.message.reply_text("_(no output)_")
             return
