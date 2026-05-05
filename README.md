@@ -56,13 +56,16 @@ token = "你的_bot_token_A"
 allowed_user_id = 123456789        # 只有这个 Telegram ID 能控制该 bot
 project_path = "/home/ubuntu/codes/projectA"
 project_name = "projectA"
+model = "claude-sonnet-4-6"        # 可选，默认 claude-sonnet-4-6
+api_url = "https://your-endpoint/v1"  # 可选，自定义 API 地址（ANTHROPIC_BASE_URL）
+api_key = "your-api-key"              # 可选，自定义 API Key（ANTHROPIC_API_KEY）
 
 [[bots]]
 token = "你的_bot_token_B"
 allowed_user_id = 123456789
 project_path = "/home/ubuntu/codes/projectB"
 project_name = "projectB"
-# model = "claude-sonnet-4-6"      # 可选，默认 claude-sonnet-4-6
+# api_url / api_key 不填则使用系统环境变量或 Claude Code 默认配置
 # chunk_size = 4000                 # 可选，Telegram 单条消息最大字符数
 ```
 

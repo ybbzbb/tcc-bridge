@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 from enum import Enum
 
@@ -17,13 +18,24 @@ class State(Enum):
 
 
 class CCSession:
-    def __init__(self, project_path: str, model: str):
+    def __init__(self, project_path: str, model: str,
+                 api_url: str | None = None, api_key: str | None = None):
         self.project_path = project_path
         self.model = model
+        self.api_url = api_url
+        self.api_key = api_key
         self.state = State.STOPPED
         self._proc: asyncio.subprocess.Process | None = None
         self._busy = False
         self._started_at: float | None = None
+
+    def _build_env(self) -> dict:
+        env = os.environ.copy()
+        if self.api_url:
+            env["ANTHROPIC_BASE_URL"] = self.api_url
+        if self.api_key:
+            env["ANTHROPIC_API_KEY"] = self.api_key
+        return env
 
     async def start(self) -> None:
         if self.state == State.RUNNING:
@@ -36,6 +48,7 @@ class CCSession:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=self.project_path,
+            env=self._build_env(),
         )
         self._started_at = time.time()
         # Drain the startup banner before marking as ready

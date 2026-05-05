@@ -13,6 +13,8 @@ class BotConfig:
     project_name: str
     model: str = "claude-sonnet-4-6"
     chunk_size: int = 4000
+    api_url: str | None = None   # ANTHROPIC_BASE_URL passed to CC subprocess
+    api_key: str | None = None   # ANTHROPIC_API_KEY passed to CC subprocess
 
 
 def load() -> list[BotConfig]:

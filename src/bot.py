@@ -29,7 +29,7 @@ HELP_TEXT = (
 class TelegramBot:
     def __init__(self, cfg: BotConfig) -> None:
         self.cfg = cfg
-        self.session = CCSession(cfg.project_path, cfg.model)
+        self.session = CCSession(cfg.project_path, cfg.model, cfg.api_url, cfg.api_key)
         self.app = Application.builder().token(cfg.token).build()
         self._register_handlers()
 
