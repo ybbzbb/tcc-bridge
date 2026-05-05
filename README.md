@@ -98,6 +98,18 @@ project_name = "projectB"
 
 ## 直接运行（测试用）
 
+使用 `make` 命令管理进程：
+
+```bash
+make start    # 后台启动
+make stop     # 停止服务
+make restart  # 重启服务
+make status   # 查看是否在运行
+make log    # 实时追踪日志，Ctrl+C 退出 
+```
+
+或者直接在前台运行（日志实时输出到终端）：
+
 ```bash
 python3 src/main.py
 ```
@@ -107,6 +119,15 @@ python3 src/main.py
 ---
 
 ## systemd 部署（生产环境）
+
+如果你是在全新 Ubuntu 22.04 服务器上部署，仓库内已经提供一键脚本：
+
+```bash
+chmod +x deploy/install_ubuntu22.sh
+./deploy/install_ubuntu22.sh
+```
+
+脚本会自动安装 `python3` / `python3-venv`、创建 `.venv`、安装依赖、生成 `bots.toml`、写入 systemd service 并启动服务。
 
 ### 1. 复制 service 文件
 

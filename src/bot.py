@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -25,11 +26,12 @@ def _mask(uid: int) -> str:
 
 HELP_TEXT = (
     "Commands:\n"
-    "/start   — Start Claude Code session\n"
-    "/stop    — Stop session\n"
-    "/restart — Restart session (clears context)\n"
-    "/status  — Show session status\n"
-    "/help    — Show this message\n\n"
+    "/start         — Start Claude Code session\n"
+    "/stop          — Stop session\n"
+    "/restart       — Restart session (clears context)\n"
+    "/close_message — Cancel the current in-progress message\n"
+    "/status        — Show session status\n"
+    "/help          — Show this message\n\n"
     "Any other message is forwarded to Claude Code."
 )
 
@@ -39,12 +41,14 @@ class TelegramBot:
         self.cfg = cfg
         self.session = CCSession(cfg.project_path, cfg.model, cfg.api_url, cfg.api_key)
         self.app = Application.builder().token(cfg.token).build()
+        self._heartbeat_task: asyncio.Task | None = None
         self._register_handlers()
 
     def _register_handlers(self) -> None:
         self.app.add_handler(CommandHandler("start", self._cmd_start))
         self.app.add_handler(CommandHandler("stop", self._cmd_stop))
         self.app.add_handler(CommandHandler("restart", self._cmd_restart))
+        self.app.add_handler(CommandHandler("close_message", self._cmd_close_message))
         self.app.add_handler(CommandHandler("status", self._cmd_status))
         self.app.add_handler(CommandHandler("help", self._cmd_help))
         self.app.add_handler(
@@ -52,7 +56,7 @@ class TelegramBot:
         )
 
     def _allowed(self, update: Update) -> bool:
-        return _mask(update.effective_user.id) == self.cfg.allowed_user_id
+        return update.effective_user.id == self.cfg.allowed_user_id
 
     async def _cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
@@ -82,13 +86,23 @@ class TelegramBot:
         self.session.restart()
         await update.message.reply_text("✅ Session restarted.")
 
+    async def _cmd_close_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._allowed(update):
+            return
+        if not self.session.is_busy:
+            await update.message.reply_text("⚠️ No message in progress.")
+            return
+        self.session.cancel()
+        log.info("[%s] message cancelled by user %s", self.cfg.project_name, _mask(update.effective_user.id))
+        await update.message.reply_text("🚫 Message cancelled.")
+
     async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
         if not self.session.is_running:
             text = f"🔴 Stopped | {self.cfg.project_name}"
         elif self.session.is_busy:
-            text = f"⏳ Busy | {self.cfg.project_name} | Uptime: {self.session.uptime}"
+            text = f"⏳ Busy ({self.session.busy_elapsed}s) | {self.cfg.project_name} | Uptime: {self.session.uptime}"
         else:
             text = f"✅ Idle | {self.cfg.project_name} | Uptime: {self.session.uptime}"
         await update.message.reply_text(text)
@@ -105,7 +119,10 @@ class TelegramBot:
             await update.message.reply_text("🔴 Session not running. Send /start first.")
             return
         if self.session.is_busy:
-            await update.message.reply_text("⏳ Claude Code is busy. Wait for it to finish.")
+            await update.message.reply_text(
+                f"⏳ Busy ({self.session.busy_elapsed}s elapsed). "
+                f"Use /close_message to cancel."
+            )
             return
 
         try:
@@ -114,12 +131,17 @@ class TelegramBot:
             await update.message.reply_text(f"❌ {e}")
             return
 
+        await context.bot.send_chat_action(self.cfg.allowed_user_id, "typing")
+
         sent = 0
         try:
             async for raw in stream:
                 for part in chunk(strip_ansi(raw), self.cfg.chunk_size):
                     await context.bot.send_message(self.cfg.allowed_user_id, part)
                     sent += 1
+                    # Refresh typing indicator every ~20 messages
+                    if sent % 20 == 0:
+                        await context.bot.send_chat_action(self.cfg.allowed_user_id, "typing")
         except RuntimeError as e:
             await update.message.reply_text(f"❌ {e}")
             return
@@ -132,16 +154,31 @@ class TelegramBot:
             return
 
         log.info("[%s] reply %d message(s)", self.cfg.project_name, sent)
-        if sent == 0:
+        if sent == 0 and not self.session.was_cancelled:
             await update.message.reply_text("_(no output)_")
+
+    async def _heartbeat_loop(self) -> None:
+        while True:
+            await asyncio.sleep(60)
+            if self.session.is_busy:
+                status = f"busy ({self.session.busy_elapsed}s)"
+            elif self.session.is_running:
+                status = "idle"
+            else:
+                status = "stopped"
+            log.info("[heartbeat] %s | %s | uptime=%s",
+                     self.cfg.project_name, status, self.session.uptime)
 
     async def start(self) -> None:
         await self.app.initialize()
         await self.app.start()
         await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         log.info("Bot started for project: %s", self.cfg.project_name)
 
     async def stop(self) -> None:
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
         await self.app.updater.stop()
         await self.app.stop()
         await self.app.shutdown()
