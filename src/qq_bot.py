@@ -182,9 +182,8 @@ class QQBot:
             cfg=cfg,
             intents=intents,
             is_sandbox=False,
-            log_level=logging.WARNING,
-            bot_log=False,
-            ext_handlers=False,
+            log_level=logging.INFO,
+            bot_log=True,
         )
 
     async def start(self):
