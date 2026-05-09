@@ -1,17 +1,18 @@
 [Unit]
-Description=TCC Bridge - Telegram Claude Code Bridge
+Description=TCC Bridge - Chat Claude Code Bridge
 After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-Group=ubuntu
-WorkingDirectory=/opt/tcc-bridge
-Environment=TCC_BRIDGE_CONFIG=/etc/tcc-bridge/bots.toml
-EnvironmentFile=-/opt/tcc-bridge/.env
-ExecStart=/opt/tcc-bridge/.venv/bin/python /opt/tcc-bridge/src/main.py
+User=root
+Group=root
+WorkingDirectory=/data/tcc/src
+Environment=TCC_BRIDGE_CONFIG=/data/tcc/bots.toml
+EnvironmentFile=-/data/tcc/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /data/tcc/src/main.py
 Restart=on-failure
-RestartSec=10
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=tcc-bridge
