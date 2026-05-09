@@ -46,9 +46,13 @@ class QQBotClient(botpy.Client):
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
     def _allowed_c2c(self, message: C2CMessage) -> bool:
+        if not self.cfg.allowed_qq_openid:
+            return True  # no whitelist = accept all
         return message.author.user_openid == self.cfg.allowed_qq_openid
 
     def _allowed_group(self, message: GroupMessage) -> bool:
+        if not self.cfg.allowed_qq_group_openid:
+            return True  # no whitelist = accept all
         return message.group_openid == self.cfg.allowed_qq_group_openid
 
     async def _send_text(self, message, text: str):
