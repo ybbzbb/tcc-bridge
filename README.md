@@ -1,14 +1,14 @@
 # tcc-bridge
 
-**Chat Claude Code Bridge** — 通过聊天软件远程控制服务器上运行的 Claude Code。
+**QQ Claude Code Bridge** — 通过 QQ 远程控制服务器上运行的 Claude Code。
 
-一个 bridge 进程管理多个 Bot，每个 Bot 对应一个项目。支持 Telegram 和 QQ 两个平台。
+一个 bridge 进程管理多个 Bot，每个 Bot 对应一个项目。
 
 ```
-手机聊天 App（Telegram / QQ）
+手机 QQ App
+      ↕ WebSocket
+QQ 官方机器人 API
       ↕
-平台 API
-      ↕ polling / WebSocket
 tcc-bridge 服务（一个 systemd 进程）
       ├── Bot A ←→ Agent SDK session（projectA）
       └── Bot B ←→ Agent SDK session（projectB）
@@ -18,30 +18,11 @@ tcc-bridge 服务（一个 systemd 进程）
 
 ---
 
-## 支持平台
-
-| 平台 | 国内可用 | 说明 |
-|------|---------|------|
-| **QQ** | 是 | 使用 QQ 官方机器人 API，个人开发者可注册 |
-| **Telegram** | 需代理 | 使用 Telegram Bot API，海外服务器直连 |
-
----
-
 ## 前置要求
 
 - Ubuntu 22.04（或其他 systemd Linux）
-- Python 3.11+
-- Python 包（通过 `pip install -r requirements.txt` 安装）
-
-### QQ 平台
-
-- QQ 机器人 App ID 和 App Secret（从 [q.qq.com](https://q.qq.com) 申请）
-- 你的 QQ 用户 OpenID（通过机器人事件获取）
-
-### Telegram 平台
-
-- Telegram Bot Token（从 [@BotFather](https://t.me/BotFather) 创建）
-- 你的 Telegram User ID（从 [@userinfobot](https://t.me/userinfobot) 查询）
+- Python 3.10+
+- QQ 机器人 App ID 和 App Secret（从 [q.qq.com](https://q.qq.com) 申请，个人开发者可注册）
 
 ---
 
@@ -69,11 +50,10 @@ cp bots.toml.example bots.toml
 nano bots.toml
 ```
 
-#### QQ Bot 配置示例
+配置示例：
 
 ```toml
 [[bots]]
-platform = "qq"
 qq_app_id = "your_app_id"
 qq_app_secret = "your_app_secret"
 allowed_qq_openid = "user_openid"
@@ -82,18 +62,6 @@ project_name = "projectA"
 model = "mimo-v2.5-pro"
 api_url = "https://your-api-endpoint/v1"
 api_key = "your-api-key"
-```
-
-#### Telegram Bot 配置示例
-
-```toml
-[[bots]]
-platform = "telegram"
-token = "your_bot_token"
-allowed_user_id = 123456789
-project_path = "/home/ubuntu/codes/projectB"
-project_name = "projectB"
-model = "claude-sonnet-4-6"
 ```
 
 每个 `[[bots]]` 块对应一个 Bot 和一个项目，数量不限。
