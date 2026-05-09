@@ -24,6 +24,7 @@ class BotConfig:
     api_key: str | None = None   # ANTHROPIC_API_KEY
     telegram_api_url: str | None = None  # CF Worker URL for Telegram API proxy
     telegram_api_key: str | None = None  # X-TCC-Key for CF Worker auth
+    telegram_proxy: str | None = None    # SOCKS5/HTTP proxy for Telegram API
 
 
 def load() -> list[BotConfig]:

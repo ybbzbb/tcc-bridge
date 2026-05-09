@@ -44,11 +44,17 @@ class TelegramBot:
         if cfg.telegram_api_url:
             base = cfg.telegram_api_url.rstrip("/")
             builder = builder.base_url(f"{base}/bot").base_file_url(f"{base}/file/bot")
+        httpx_kwargs = {}
         if cfg.telegram_api_key:
+            httpx_kwargs["headers"] = {"X-TCC-Key": cfg.telegram_api_key}
+        if cfg.telegram_proxy:
+            import httpx
+            httpx_kwargs["proxy"] = cfg.telegram_proxy
+        if httpx_kwargs:
             from telegram.request import HTTPXRequest
-            request = HTTPXRequest(httpx_kwargs={"headers": {"X-TCC-Key": cfg.telegram_api_key}})
+            request = HTTPXRequest(httpx_kwargs=httpx_kwargs or None)
             builder = builder.request(request)
-            builder = builder.get_updates_request(HTTPXRequest(httpx_kwargs={"headers": {"X-TCC-Key": cfg.telegram_api_key}}))
+            builder = builder.get_updates_request(HTTPXRequest(httpx_kwargs=httpx_kwargs or None))
         self.app = builder.build()
         self._heartbeat_task: asyncio.Task | None = None
         self._register_handlers()
