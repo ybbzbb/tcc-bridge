@@ -1,4 +1,6 @@
+# Telegram Bot Example
 [[bots]]
+platform = "telegram"
 token = "your_telegram_bot_token"
 allowed_user_id = 123456789
 project_path = "/home/ubuntu/codes/projectA"
@@ -10,12 +12,17 @@ api_key = "your-api-key"                   # ANTHROPIC_API_KEY
 # Telegram API proxy (for servers in China that can't reach api.telegram.org)
 # telegram_api_url = "https://tg-proxy.your-domain.workers.dev"
 # telegram_api_key = "your-tcc-key"       # must match CF Worker's TCC_KEY secret
+# telegram_proxy = "socks5h://127.0.0.1:40000"
 
+# QQ Bot Example
 [[bots]]
-token = "another_telegram_bot_token"
-allowed_user_id = 123456789
+platform = "qq"
+qq_app_id = "your_qq_app_id"
+qq_app_secret = "your_qq_app_secret"
+allowed_qq_openid = "user_openid_for_c2c"
+# allowed_qq_group_openid = "group_openid_for_at_messages"
 project_path = "/home/ubuntu/codes/projectB"
 project_name = "projectB"
-model = "gpt-4o"
-api_url = "https://another-endpoint/v1"
-api_key = "another-api-key"
+model = "mimo-v2.5-pro"
+api_url = "https://your-api-endpoint/v1"
+api_key = "your-api-key"

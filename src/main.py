@@ -12,10 +12,10 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
+logging.getLogger("botpy").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
 import config
-from bot import TelegramBot
 
 
 async def run() -> None:
@@ -24,7 +24,14 @@ async def run() -> None:
         log.error("No bots configured in bots.toml")
         return
 
-    bots = [TelegramBot(cfg) for cfg in configs]
+    bots = []
+    for cfg in configs:
+        if cfg.platform == "qq":
+            from qq_bot import QQBot
+            bots.append(QQBot(cfg))
+        else:
+            from bot import TelegramBot
+            bots.append(TelegramBot(cfg))
 
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
