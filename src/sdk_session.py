@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from typing import AsyncIterator
+
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    TextBlock,
+)
 
 log = logging.getLogger(__name__)
 
@@ -12,27 +18,39 @@ MAX_RESPONSE = 600.0     # 10 min hard cap per message
 IDLE_SHUTDOWN = 30 * 60  # 30 min no messages → auto-stop
 
 
-class CCSession:
+class SDKSession:
+    """Claude Agent SDK backend — persistent multi-turn session."""
+
     def __init__(self, project_path: str, model: str,
                  api_url: str | None = None, api_key: str | None = None):
         self.project_path = project_path
         self.model = model
         self.api_url = api_url
         self.api_key = api_key
-        self._proc: asyncio.subprocess.Process | None = None
+        self._client: ClaudeSDKClient | None = None
         self._busy = False
         self._busy_since: float | None = None
         self._cancelled = False
         self._started_at: float | None = None
         self._idle_task: asyncio.Task | None = None
+        self._current_task: asyncio.Task | None = None
 
-    def _build_env(self) -> dict:
-        env = os.environ.copy()
+    def _build_options(self) -> ClaudeAgentOptions:
+        env = {}
         if self.api_url:
             env["ANTHROPIC_BASE_URL"] = self.api_url
         if self.api_key:
-            env["ANTHROPIC_API_KEY"] = self.api_key
-        return env
+            env["ANTHROPIC_AUTH_TOKEN"] = self.api_key
+        opts = ClaudeAgentOptions(
+            cwd=self.project_path,
+            model=self.model,
+            allowed_tools=["Read", "Write", "Edit", "MultiEdit",
+                           "Bash", "Glob", "Grep", "WebFetch", "WebSearch"],
+            permission_mode="acceptEdits",
+            max_turns=200,
+            env=env or None,
+        )
+        return opts
 
     @property
     def is_running(self) -> bool:
@@ -61,25 +79,31 @@ class CCSession:
 
     def cancel(self) -> None:
         self._cancelled = True
-        if self._proc and self._proc.returncode is None:
-            self._proc.kill()
+        if self._current_task and not self._current_task.done():
+            self._current_task.cancel()
 
     def start(self) -> None:
         self._started_at = time.time()
         self._reset_idle()
+        log.info("[%s] SDK session started", self.project_path)
 
     def stop(self) -> None:
         self._started_at = None
         self._busy = False
         self._busy_since = None
         self._cancel_idle()
-        if self._proc and self._proc.returncode is None:
-            self._proc.kill()
-        self._proc = None
+        if self._current_task and not self._current_task.done():
+            self._current_task.cancel()
+        self._current_task = None
+        # Client will be recreated on next message
+        self._client = None
+        log.info("[%s] SDK session stopped", self.project_path)
 
     def restart(self) -> None:
         self.stop()
         self.start()
+
+    # -- idle monitor --
 
     def _reset_idle(self) -> None:
         self._cancel_idle()
@@ -97,10 +121,12 @@ class CCSession:
     async def _idle_monitor(self) -> None:
         try:
             await asyncio.sleep(IDLE_SHUTDOWN)
-            log.info("[%s] Idle 30 min, auto-stopping session", self.project_path)
+            log.info("[%s] Idle 30 min, auto-stopping SDK session", self.project_path)
             self.stop()
         except asyncio.CancelledError:
             pass
+
+    # -- message handling --
 
     async def send_message(self, text: str) -> AsyncIterator[str]:
         if not self.is_running:
@@ -114,77 +140,52 @@ class CCSession:
 
     async def _stream(self, text: str) -> AsyncIterator[str]:
         try:
-            cmd = ["claude", "--dangerously-skip-permissions",
-                   "--model", self.model, "--print", "--continue"]
-            log.info(">>> [%s] %s", self.project_path, text[:200])
+            log.info(">>> [%s] (SDK) %s", self.project_path, text[:200])
 
-            self._proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=self.project_path,
-                env=self._build_env(),
-            )
-            self._proc.stdin.write(text.encode() + b"\n")
-            await self._proc.stdin.drain()
-            self._proc.stdin.close()
+            options = self._build_options()
+
+            # Use ClaudeSDKClient for multi-turn persistent session
+            if self._client is None:
+                self._client = ClaudeSDKClient(options=options)
+                await self._client.__aenter__()
+
+            await self._client.query(text)
 
             total_chars = 0
-            stderr_chunks: list[bytes] = []
             loop = asyncio.get_running_loop()
             deadline = loop.time() + MAX_RESPONSE
             start_time = loop.time()
             last_heartbeat = start_time
 
-            async def _read_stderr() -> None:
-                while True:
-                    chunk = await self._proc.stderr.read(4096)
-                    if not chunk:
-                        break
-                    stderr_chunks.append(chunk)
+            async for message in self._client.receive_response():
+                if self._cancelled:
+                    break
 
-            stderr_task = loop.create_task(_read_stderr())
-
-            while True:
                 remaining = deadline - loop.time()
                 if remaining <= 0:
-                    self._proc.kill()
                     raise RuntimeError("Response timed out (10 min)")
 
-                try:
-                    data = await asyncio.wait_for(
-                        self._proc.stdout.read(4096),
-                        timeout=min(10.0, remaining),
-                    )
-                    if not data:
-                        break  # EOF = process finished
-                    decoded = data.decode("utf-8", errors="replace")
-                    total_chars += len(decoded)
-                    yield decoded
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, TextBlock) and block.text:
+                            total_chars += len(block.text)
+                            yield block.text
 
-                    now = loop.time()
-                    if now - last_heartbeat >= 10:
-                        log.info("... CC running (%.0fs elapsed)", now - start_time)
-                        last_heartbeat = now
-
-                except asyncio.TimeoutError:
-                    now = loop.time()
-                    if now - last_heartbeat >= 10:
-                        log.info("... waiting for CC response (%.0fs)", now - start_time)
-                        last_heartbeat = now
-
-            await self._proc.wait()
-            await stderr_task
-            if self._proc.returncode not in (0, -9):  # -9 = SIGKILL (cancelled)
-                stderr_text = b"".join(stderr_chunks).decode("utf-8", errors="replace").strip()
-                log.error("CC exited with code %d, stderr: %s", self._proc.returncode, stderr_text[:500])
-                raise RuntimeError(f"CC exited with code {self._proc.returncode}\n{stderr_text[:200]}")
+                now = loop.time()
+                if now - last_heartbeat >= 10:
+                    log.info("... SDK running (%.0fs elapsed)", now - start_time)
+                    last_heartbeat = now
 
             if not self._cancelled:
-                log.info("<<< [%s] done, %d chars received", self.project_path, total_chars)
+                log.info("<<< [%s] (SDK) done, %d chars received",
+                         self.project_path, total_chars)
                 self._reset_idle()
 
+        except asyncio.CancelledError:
+            log.info("[%s] SDK message cancelled", self.project_path)
+        except Exception:
+            log.exception("[%s] SDK stream failed", self.project_path)
+            raise
         finally:
             self._busy = False
             self._busy_since = None

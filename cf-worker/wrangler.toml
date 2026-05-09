@@ -1,0 +1,8 @@
+name = "tg-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# 可选：设置鉴权密钥（推荐）
+# 部署后运行: npx wrangler secret put TCC_KEY
+# [vars]
+# TCC_KEY = ""  # 不要在这里写明文，用 wrangler secret put

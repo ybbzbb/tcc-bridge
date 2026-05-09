@@ -7,12 +7,14 @@
 ```
 手机 Telegram App
       ↕ HTTPS
-Telegram Bot API
+Telegram Bot API（或 CF Worker 代理）
       ↕ polling
 tcc-bridge 服务（一个 systemd 进程）
-      ├── Bot A ←→ CC 子进程（projectA）
-      └── Bot B ←→ CC 子进程（projectB）
+      ├── Bot A ←→ Agent SDK session（projectA）
+      └── Bot B ←→ Agent SDK session（projectB）
 ```
+
+使用 Claude Agent SDK 与 Claude 交互，支持持久多轮会话。
 
 ---
 
@@ -20,7 +22,7 @@ tcc-bridge 服务（一个 systemd 进程）
 
 - Ubuntu 22.04（或其他 systemd Linux）
 - Python 3.11+
-- [Claude Code CLI](https://github.com/anthropics/claude-code) 已安装并完成登录
+- Python 包 `claude-agent-sdk`（通过 `pip install -r requirements.txt` 安装）
 - 每个项目对应一个 Telegram Bot Token（从 [@BotFather](https://t.me/BotFather) 创建）
 - 你的 Telegram User ID（从 [@userinfobot](https://t.me/userinfobot) 查询）
 
@@ -173,6 +175,43 @@ sudo journalctl -u tcc-bridge -f
 
 ---
 
+## 中国服务器：Cloudflare Workers 代理 Telegram API
+
+如果服务器在中国大陆，无法直连 `api.telegram.org`，可部署一个 Cloudflare Worker 作为反向代理。
+
+### 1. 部署 CF Worker
+
+```bash
+cd cf-worker
+npx wrangler login
+npx wrangler deploy
+```
+
+部署后获得 URL，格式如：`https://tg-proxy.your-domain.workers.dev`
+
+### 2. （可选）设置鉴权密钥
+
+```bash
+npx wrangler secret put TCC_KEY
+# 输入一个随机字符串作为密钥
+```
+
+### 3. 配置 bots.toml
+
+```toml
+[[bots]]
+token = "123456:ABC..."
+allowed_user_id = 12345678
+project_path = "/home/user/project"
+project_name = "my-project"
+telegram_api_url = "https://tg-proxy.your-domain.workers.dev"
+telegram_api_key = "your-tcc-key"  # 与 CF Worker 的 TCC_KEY 一致，未设置 TCC_KEY 则不填
+```
+
+重启服务即可：`sudo systemctl restart tcc-bridge`
+
+---
+
 ## 添加新项目
 
 1. 在 [@BotFather](https://t.me/BotFather) 创建新 bot，获取 token
@@ -199,7 +238,7 @@ sudo journalctl -u tcc-bridge -f
 
 - `allowed_user_id` 白名单：非白名单用户的消息被静默忽略。
 - `bots.toml` 含有 bot token，生产环境建议放在 `/etc/tcc-bridge/bots.toml`，不要跟代码放在一起。
-- Claude Code 以 `--dangerously-skip-permissions` 模式运行，拥有完整文件系统权限，请确保服务器安全。
+- Agent SDK 以 `permission_mode="acceptEdits"` 运行，预授权文件读写和命令执行，请确保服务器安全。
 
 ---
 
@@ -210,9 +249,9 @@ sudo journalctl -u tcc-bridge -f
 - 检查 `allowed_user_id` 是否是你自己的 ID
 - 查看日志：`journalctl -u tcc-bridge -f`
 
-**Claude Code 启动失败？**
-- 确认 `claude` 命令可用：`which claude`
-- 确认已登录：`claude --version`
+**Claude Agent SDK 启动失败？**
+- 确认已安装：`pip3 show claude-agent-sdk`
+- 确认 `ANTHROPIC_API_KEY` 已配置（环境变量或 `bots.toml` 中的 `api_key`）
 - 确认 `project_path` 路径存在
 
 ---

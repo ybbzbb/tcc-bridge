@@ -45,3 +45,4 @@ logs/
 htmlcov/
 bot.log
 .pid
+.wrangler/

@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 from config import BotConfig
-from cc_session import CCSession
+from sdk_session import SDKSession
 from output_processor import chunk, strip_ansi
 
 log = logging.getLogger(__name__)
@@ -39,8 +39,17 @@ HELP_TEXT = (
 class TelegramBot:
     def __init__(self, cfg: BotConfig) -> None:
         self.cfg = cfg
-        self.session = CCSession(cfg.project_path, cfg.model, cfg.api_url, cfg.api_key)
-        self.app = Application.builder().token(cfg.token).build()
+        self.session = SDKSession(cfg.project_path, cfg.model, cfg.api_url, cfg.api_key)
+        builder = Application.builder().token(cfg.token)
+        if cfg.telegram_api_url:
+            base = cfg.telegram_api_url.rstrip("/")
+            builder = builder.base_url(f"{base}/bot").base_file_url(f"{base}/file/bot")
+        if cfg.telegram_api_key:
+            from telegram.request import HTTPXRequest
+            request = HTTPXRequest(httpx_kwargs={"headers": {"X-TCC-Key": cfg.telegram_api_key}})
+            builder = builder.request(request)
+            builder = builder.get_updates_request(HTTPXRequest(httpx_kwargs={"headers": {"X-TCC-Key": cfg.telegram_api_key}}))
+        self.app = builder.build()
         self._heartbeat_task: asyncio.Task | None = None
         self._register_handlers()
 
